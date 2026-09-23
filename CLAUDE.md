@@ -27,8 +27,13 @@ Yahoo (live search + prices) and stores the book in KV.
 ## Invariants (don't quietly change)
 
 - Benchmark/currency/country resolve from the **Yahoo ticker suffix** (`SUFFIX_*` maps).
-- Call scoring (`scoreCall`): adjusted closes, date-driven; `alpha = stockRet − benchRet`;
-  Buy hits α>0, Sell hits α<0, **Hold excluded** from hit-rate. Holdings use cost basis.
+- Call scoring (`alphaPeriods` → `gradeCall`): adjusted closes, date-driven. `abs` is the return **on
+  the call**, not the share price — the price move for Buy/Hold, its **opposite for Sell**
+  (`callSign`), so shorting a stock that falls 10% scores +10%. `rel = abs − benchRet` (the index's
+  return stays raw), and **every** call type hits when `rel > 0`. `alphaTotal` compounds the
+  per-stance `abs` for the lifetime row. Holdings use cost basis. NB `scoreCall`/`aggr`/`idxCell`
+  are dead leftovers of the old flat-call model and still encode the old Sell rule — not in the
+  render path; don't revive them.
 - All live data goes through the Worker (Yahoo blocks direct browser calls — CORS). Don't add
   browser→Yahoo fetches.
 

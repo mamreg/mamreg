@@ -16,6 +16,10 @@ auto-save to the cloud. Prices are indicative (delayed ~15 min via the Worker's 
   - **Alpha** — open calls on top, **Closed calls** table below (with exit date + exit price).
     Columns: Entry date · Ticker · Stock · Call · **Executed** (tick) · Entry cost · Return · Index return · Return vs
     index · Result · Close.
+    **Returns are on the call, not the share price.** A **Sell** is scored the opposite way round to a
+    Buy: sell a stock and it drops 10%, the call returns **+10%**. **vs Index** is that return minus
+    the index's own return over the same dates, and any call with a positive **vs Index** is a **HIT**
+    (Buy, Sell and Hold alike). The lifetime row in **History** compounds each stance the same way.
   - **Coverage List** — an editable list you key in yourself (independent of Alpha): **Entry date** ·
     Ticker · Stock · **Rating** (OW / N / UW) · **Entry price** · Last price · **Total return** · vs
     Index · **History** · **Comment**. The **Rating** is a coloured pill (OW / N / UW); click
@@ -88,14 +92,25 @@ to persist.
 
 ## Scoring / hit rate
 
-For each call, with `end = exit date` (closed) or *today* (open):
-`stockRet = adjClose(end)/adjClose(entryDate) − 1`, `benchRet` likewise on the ticker's benchmark,
-`alpha = stockRet − benchRet`. **Buy** hits if `alpha > 0`, **Sell** hits if `alpha < 0`, **Hold**
-is excluded from the hit-rate. Returns use *adjusted* closes (splits/dividends clean) and are
-date-driven (the market close on the call date). Holdings, by contrast, use your cost basis.
+For each dated call, with `end` = the next call's date, the close date, or *today* while it is open:
 
-`python3 scripts/verify_calls.py` recomputes every call independently, prints the same per-analyst
-numbers the page shows, and flags bad data — it runs in CI (non-blocking).
+```
+priceRet = adjClose(end)/adjClose(callDate) − 1     # how the SHARE PRICE moved
+return   = priceRet for Buy and Hold, −priceRet for Sell
+benchRet = the same sum on the ticker's benchmark  (never flipped)
+vs Index = return − benchRet
+```
+
+The **return is on the call, not on the share price**. Sell a stock and it falls 10%, and the call
+returns **+10%**. A call is a **HIT** whenever **vs Index** is positive, and that single rule covers
+Buy, Sell and Hold alike. The lifetime row inside **History** compounds each stance the same way.
+Returns use *adjusted* closes (splits/dividends clean) and are date-driven (the market close on the
+call date). Holdings, by contrast, use your cost basis.
+
+> **`scripts/verify_calls.py` is legacy.** It audits the old flat-call seed in `data/book.json`
+> against a frozen `data/prices.json`, not the live book in KV, and it still scores Sell the old way
+> (`alpha < 0`). It is not wired into CI. Treat the app as the source of truth until it is rewritten
+> for the dated-call model.
 
 ## Local development
 

@@ -18,6 +18,14 @@ Scoring (matches the plan):
   stockRet = endPx/entryPx - 1 ; benchRet likewise on the market benchmark ; alpha = stockRet - benchRet
   hit/miss: Buy hits if alpha>0, Sell hits if alpha<0, Hold excluded from the count.
 
+*** LEGACY — THIS NO LONGER MATCHES THE APP (changed 2026-09-23) ***
+The app scores the return ON THE CALL: a Sell's return is the flipped share-price move, so a short
+that falls 10% scores +10%; vs Index = that return - benchRet; and ANY call with a positive vs Index
+is a HIT (Hold included). This script still implements the old flat-call model described above, it
+reads the legacy seed data/book.json plus a frozen data/prices.json rather than the live KV book,
+and it is not wired into CI. Treat index.html (alphaPeriods / gradeCall / alphaTotal) as the source
+of truth; this file needs a rewrite for the dated-call model before it can be trusted again.
+
 Usage:  python3 scripts/verify_calls.py [--strict]   (--strict exits 1 on any ERROR)
 """
 import bisect
