@@ -19,7 +19,7 @@ Yahoo (live search + prices) and stores the book in KV.
 ## Two tabs
 
 - **Analysts** → per-analyst summary + **Alpha** (open table + Closed table below) and
-  **Coverage List**. Alpha columns: Entry date · Ticker(search dropdown) · Stock(auto) · Call ·
+  **Coverage List**. Alpha columns: Entry date · Ticker(search dropdown) · Stock(auto) · Call · Executed(tick, one per dated call — `history[].executed`) ·
   Entry cost · Return · Index return(+bench tag) · Return vs index · Result · Close.
 - **Holdings** → grouped by country (HK/CN/IN/TW/KR/ASEAN); Cost · LTP · 1D/1W/1M/YTD · Return.
   PDF upload → heuristic parse → review modal.

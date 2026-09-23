@@ -14,7 +14,7 @@ auto-save to the cloud. Prices are indicative (delayed ~15 min via the Worker's 
   the tiles reflect the timed Alpha calls, the Coverage list, or both combined (**Auto** follows the
   sub-tab you're on). Hit rate shows in **Alpha** scope only. Then:
   - **Alpha** — open calls on top, **Closed calls** table below (with exit date + exit price).
-    Columns: Entry date · Ticker · Stock · Call · Entry cost · Return · Index return · Return vs
+    Columns: Entry date · Ticker · Stock · Call · **Executed** (tick) · Entry cost · Return · Index return · Return vs
     index · Result · Close.
   - **Coverage List** — an editable list you key in yourself (independent of Alpha): **Entry date** ·
     Ticker · Stock · **Rating** (OW / N / UW) · **Entry price** · Last price · **Total return** · vs
@@ -53,6 +53,9 @@ one-time deploy.
   Ticker (dropdown) and set the **Rating** (OW / N / UW). Open **History** (▸) → **＋ Add rating
   change** to log a dated stance (back-date it to backtest); the return during each stance and the
   total since first covered compute automatically. Independent of your timed Alpha calls.
+- **Executed:** tick the **Executed** box on a call once it has actually been acted on in the book
+  (bought / sold), so readers can tell ideas from trades. One tick per dated call — a **Change** starts
+  the new call unticked — and you can tick/untick calls logged earlier, including closed ones.
 - **A comment/rationale:** click the **💬 Comment** on any coverage name (or 💬 on an Alpha call),
   type the thesis, **Save**.
 - **A holding:** **Holdings** → **＋ Add holding** → type the ticker (dropdown) + cost; or upload a

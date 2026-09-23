@@ -99,6 +99,10 @@ select.cell{cursor:pointer; -webkit-appearance:none; appearance:none}
 .star:hover, .star.on{color:var(--accent)}
 .viewonly .star{cursor:default; pointer-events:none}
 .viewonly .star:not(.on){display:none}
+.exec{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--muted);background:transparent;color:transparent;font-size:12px;font-weight:800;line-height:1;cursor:pointer;user-select:none;vertical-align:middle}
+.exec:hover{border-color:var(--accent)}
+.exec.on{background:var(--up-bg);border-color:var(--up);color:var(--up)}
+.viewonly .exec{cursor:default;pointer-events:none}
 .chartbox{position:relative; height:260px}
 .modal{position:fixed; inset:0; background:rgba(4,6,10,.7); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px}
 .modal .box{background:var(--surface); border:1px solid var(--border-2); border-radius:14px; padding:18px; width:min(720px,95vw); max-height:90vh; overflow:auto}
@@ -575,6 +579,12 @@ const CALL_OPTS=["Buy","Sell","Hold"], CALL_FULL={Buy:"Buy",Sell:"Sell",Hold:"Ho
 function callPill(v){return `<span class="pill ${CALL_PILL[v]||"hold"}" title="${CALL_FULL[v]||""}">${esc(v||"Hold")}</span>`;}
 function starEl(o){const on=!!o.highConviction; return `<span class="star${on?" on":""}" data-star="${o.id}" title="${on?"High-conviction call — click to unmark":"Mark as a high-conviction call"}">${on?"★":"☆"}</span>`;}
 function currentCall(o){ const h=activeSorted(o); return h.length?h[h.length-1].call:"Hold"; }
+function curEntry(o){ const h=activeSorted(o); return h.length?h[h.length-1]:null; }   // the current (latest active) dated call
+function execBox(e){   // "Executed" tick — one per dated call (Buy/Sell/Hold); editors toggle it, readers see ✓ or an empty box
+  if(!e) return '<span class="flat">–</span>';
+  const on=!!e.executed;
+  return `<span class="exec${on?" on":""}" data-exec="${e.id}" title="${on?"Executed — this call was acted on in the book (click to untick)":"Not executed yet — tick once this call has been acted on (bought / sold)"}">${on?"✓":""}</span>`;
+}
 function gradeCall(call,alpha){ if(alpha==null) return "-"; const c=(call||"").toLowerCase(); if(c==="sell") return alpha<0?"HIT":"MISS"; return alpha>0?"HIT":"MISS"; }   // Sell wins when the stock lags; Buy & Hold win when it leads
 function alphaPeriods(o){   // one graded call per dated stance (return during each, absolute + vs index)
   const h=activeSorted(o), tk=o.ticker, bench=benchFromTicker(tk);
@@ -609,6 +619,7 @@ function alphaLogRow(o){   // ACTIVE / no-call rows (closed rows render via alph
     <td><input class="cell" data-f="ticker" style="width:118px;text-align:left;font-family:var(--mono)" value="${esc(o.ticker||"")}" placeholder="TICKER.XX"></td>
     <td><div style="display:flex;align-items:center;gap:5px">${starEl(o)}<input class="cell" data-f="name" style="min-width:150px;text-align:left;font-family:'Manrope'" value="${esc(o.name||"")}" placeholder="(auto)"></div></td>
     <td>${callCell}</td>
+    <td style="text-align:center">${state==="active"?execBox(curEntry(o)):'<span class="flat">–</span>'}</td>
     <td style="white-space:nowrap">${changeCell}</td>
     <td class="num">${entryPxCell}</td>
     <td class="num">${px!=null?money(px,ccy):"–"}</td>
@@ -632,6 +643,7 @@ function alphaLogClosedRow(o){   // a closed name — frozen returns + call-log 
     <td style="font-family:var(--mono);font-size:12px">${esc(o.ticker||"–")}</td>
     <td style="font-family:'Manrope'">${starEl(o)} ${esc(o.name||"")}</td>
     <td>${now?callPill(now.call):`<span class="flat">–</span>`}</td>
+    <td style="text-align:center">${execBox(curEntry(o))}</td>
     <td class="num">${entryPx!=null?money(entryPx,ccy):"–"}</td>
     <td><span style="font-family:var(--mono);font-size:12px">${o.closeDate?fmtDate(o.closeDate):"–"}</span></td>
     <td class="num">${closePx!=null?money(closePx,ccy):"–"}</td>
@@ -643,25 +655,26 @@ function alphaLogClosedRow(o){   // a closed name — frozen returns + call-log 
   return main+(open?alphaLogDetail(o):"");
 }
 function alphaLogDetail(o){   // the call log — locked record of dated Buy/Sell/Hold, per-period return + lifetime
-  const bench=benchFromTicker(o.ticker), benchNm=BENCH_NAME[bench]||"index", periods=alphaPeriods(o), tot=covTotal(o);
+  const bench=benchFromTicker(o.ticker), benchNm=BENCH_NAME[bench]||"index", periods=alphaPeriods(o), tot=covTotal(o), byId=new Map((o.history||[]).map(e=>[e.id,e]));
   const rows=periods.length?periods.map(p=>`<tr data-histid="${p.id}">
       <td class="small" style="font-family:var(--mono);white-space:nowrap">${p.date?fmtDate(p.date):"—"}</td>
       <td>${callPill(p.call)}</td>
+      <td style="text-align:center">${execBox(byId.get(p.id))}</td>
       <td class="small" style="color:var(--muted);white-space:nowrap">${p.date?fmtDate(p.date):"—"} → ${p.end?fmtDate(p.end):"now"}</td>
       <td class="num">${pctSpan(p.abs)}</td>
       <td class="num">${p.rel==null?'<span class="flat">–</span>':pctSpan(p.rel)}</td>
       <td class="num">${resultBadge(p.result,!p.end)}</td>
       <td><span class="del" data-covdel="${p.id}" title="Delete this call (kept in the deleted list)">✕</span></td></tr>`).join("")
-    : `<tr><td colspan="7" style="color:var(--muted);padding:10px">No calls yet — use the <b>Set call</b> button on the row.</td></tr>`;
+    : `<tr><td colspan="8" style="color:var(--muted);padding:10px">No calls yet — use the <b>Set call</b> button on the row.</td></tr>`;
   const closedNote=o.closeDate?`<div class="small" style="margin:6px 0;color:var(--accent)">Closed on ${fmtDate(o.closeDate)} — returns are frozen at that date.</div>`:"";
-  const foot=`<tr class="subtotal"><td colspan="3">Total since first call${tot.from?" · from "+fmtDate(tot.from):""}${o.closeDate?" (frozen "+fmtDate(o.closeDate)+")":""}</td><td class="num">${pctSpan(tot.abs)}</td><td class="num">${pctSpan(tot.rel)}</td><td colspan="2"></td></tr>`;
+  const foot=`<tr class="subtotal"><td colspan="3">Total since first call${tot.from?" · from "+fmtDate(tot.from):""}${o.closeDate?" (frozen "+fmtDate(o.closeDate)+")":""}</td><td class="num">${pctSpan(tot.abs)}</td><td class="num">${pctSpan(tot.rel)}</td><td colspan="3"></td></tr>`;
   const del=sortedHistory(o).filter(e=>e.deleted);
   const delBlock=del.length?`<div class="small" style="margin-top:10px;color:var(--text-2)"><b>Deleted calls</b> (kept for the record)</div>
     <table style="width:auto;min-width:360px"><tbody>${del.map(e=>`<tr><td class="small" style="font-family:var(--mono);white-space:nowrap;text-decoration:line-through;color:var(--muted)">${e.date?fmtDate(e.date):"—"}</td><td style="opacity:.5">${callPill(e.call)}</td><td><span class="link" data-covrestore="${e.id}" style="font-size:12px;color:var(--text-2)" title="Restore this call">↺ restore</span></td></tr>`).join("")}</tbody></table>`:"";
-  return `<tr class="cov-detail"><td colspan="13" style="background:var(--surface-2);padding:10px 14px 12px">
-    <div class="small" style="color:var(--text-2);margin-bottom:6px"><b>Call log — ${esc(o.name||o.ticker||"")}</b> · locked record of your Buy/Sell/Hold calls; the stock's return during each, absolute and vs ${esc(benchNm)}, graded HIT/MISS on alpha.</div>
+  return `<tr class="cov-detail"><td colspan="14" style="background:var(--surface-2);padding:10px 14px 12px">
+    <div class="small" style="color:var(--text-2);margin-bottom:6px"><b>Call log — ${esc(o.name||o.ticker||"")}</b> · locked record of your Buy/Sell/Hold calls; the stock's return during each, absolute and vs ${esc(benchNm)}, graded HIT/MISS on alpha. <b>Executed</b> = the call was actually acted on.</div>
     ${closedNote}
-    <table style="width:auto;min-width:560px"><thead><tr><th style="text-align:left">Date of call</th><th style="text-align:left">Call</th><th style="text-align:left">Period</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th></th></tr></thead>
+    <table style="width:auto;min-width:620px"><thead><tr><th style="text-align:left">Date of call</th><th style="text-align:left">Call</th><th style="text-align:center" title="Ticked when this call was acted on (bought / sold)">Executed</th><th style="text-align:left">Period</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th></th></tr></thead>
       <tbody>${rows}</tbody><tfoot>${foot}</tfoot></table>
     ${delBlock}
   </td></tr>`;
@@ -669,15 +682,16 @@ function alphaLogDetail(o){   // the call log — locked record of dated Buy/Sel
 function alphaLogTable(){
   const rows=(BOOK.calls||[]).filter(o=>o.analyst===selAnalyst);
   const active=rows.filter(o=>covState(o)!=="closed"), closed=rows.filter(o=>covState(o)==="closed");
-  const head=`<tr><th style="text-align:left">History</th><th style="text-align:left">Entry date</th><th style="text-align:left">Ticker</th><th style="text-align:left">Stock</th><th style="text-align:left">Call</th><th>Change Call</th><th class="num">Entry price</th><th class="num">Last price</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th>Comment</th><th></th></tr>`;
-  const body=active.length?active.map(alphaLogRow).join(""):emptyRow(13,"No calls yet — click + Log call.");
-  const closedHead=`<tr><th style="text-align:left">History</th><th style="text-align:left">Entry date</th><th style="text-align:left">Ticker</th><th style="text-align:left">Stock</th><th style="text-align:left">Call</th><th class="num">Entry price</th><th>Close date</th><th class="num">Close price</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th>Comment</th><th></th></tr>`;
+  const head=`<tr><th style="text-align:left">History</th><th style="text-align:left">Entry date</th><th style="text-align:left">Ticker</th><th style="text-align:left">Stock</th><th style="text-align:left">Call</th><th style="text-align:center" title="Ticked when the call was actually acted on in the book (bought / sold)">Executed</th><th>Change Call</th><th class="num">Entry price</th><th class="num">Last price</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th>Comment</th><th></th></tr>`;
+  const body=active.length?active.map(alphaLogRow).join(""):emptyRow(14,"No calls yet — click + Log call.");
+  const closedHead=`<tr><th style="text-align:left">History</th><th style="text-align:left">Entry date</th><th style="text-align:left">Ticker</th><th style="text-align:left">Stock</th><th style="text-align:left">Call</th><th style="text-align:center" title="Ticked when the call was actually acted on in the book (bought / sold)">Executed</th><th class="num">Entry price</th><th>Close date</th><th class="num">Close price</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th>Comment</th><th></th></tr>`;
   const closedTable = closed.length ? `<div style="margin-top:24px" class="desc"><b>Closed calls</b> — calls you've closed; returns are <b>frozen</b> at the close date. Open <b>History</b> (▸) for the full call log; <b>Reopen</b> to resume.</div>
     <div class="tw"><table><thead>${closedHead}</thead><tbody>${closed.map(alphaLogClosedRow).join("")}</tbody></table></div>` : "";
   const editing=canEdit(selAnalyst);
   const howto=editing?`<div class="desc" style="margin-bottom:6px"><b>Add a call:</b> type a ticker and pick the exact listing from the dropdown, click <b>Set call</b>, then choose <b>Buy / Sell / Hold</b> and the date you made the call. The stock name, entry price and live return fill in automatically.</div>
-    <div class="desc" style="margin-bottom:6px"><b>Calls are locked once saved</b> — you can't edit a past call. Click <b>Change</b> to log a new dated call, or <b>Close call</b> to freeze the return and move it to <b>Closed calls</b> below.</div>`:"";
-  const legend=`<div class="desc">Open the <b>▸ History</b> in the first column for a stock's full call log and lifetime return · ${editing?"click the <b>☆ star</b> beside a name to mark it a <b>high-conviction</b> call":"a <b>★</b> marks a <b>high-conviction</b> call"} · every call is scored <b>HIT / MISS</b> versus its index (<b>*</b> = still open, updating live).</div>`;
+    <div class="desc" style="margin-bottom:6px"><b>Calls are locked once saved</b> — you can't edit a past call. Click <b>Change</b> to log a new dated call, or <b>Close call</b> to freeze the return and move it to <b>Closed calls</b> below.</div>
+    <div class="desc" style="margin-bottom:6px"><b>Executed:</b> tick the box once the call has actually been acted on in the book (bought / sold). The tick belongs to that dated call — a <b>Change</b> starts a new call, unticked — and you can tick or untick calls logged earlier, including closed ones.</div>`:"";
+  const legend=`<div class="desc">Open the <b>▸ History</b> in the first column for a stock's full call log and lifetime return · ${editing?"click the <b>☆ star</b> beside a name to mark it a <b>high-conviction</b> call":"a <b>★</b> marks a <b>high-conviction</b> call"} · every call is scored <b>HIT / MISS</b> versus its index (<b>*</b> = still open, updating live) · a <b>✓ Executed</b> tick means the call was actually acted on (bought / sold).</div>`;
   return `${howto}${legend}
     <div class="tw"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
     <div class="addbar"><button class="btn sm" data-addcall>+ Log call</button></div>
@@ -888,6 +902,9 @@ function wire(){
   v.querySelectorAll("[data-callreopen]").forEach(b=>b.onclick=()=>{const o=(BOOK.calls||[]).find(x=>x.id===b.dataset.callreopen); if(o){delete o.closeDate; save(); render();}});
   // high-conviction star — editors toggle; readers see only the gold ★ (CSS .viewonly gating)
   v.querySelectorAll("[data-star]").forEach(s=>s.onclick=()=>{ const o=[...(BOOK.calls||[]),...(BOOK.coverage||[])].find(x=>x.id===s.dataset.star); if(!o||!canEdit(o.analyst))return; o.highConviction=!o.highConviction; save(); render(); });
+  // Executed tick — per dated call; editors (own analyst) + admin toggle, readers just see it (CSS .viewonly gating)
+  v.querySelectorAll("[data-exec]").forEach(b=>b.onclick=()=>{ const hid=b.dataset.exec;
+    for(const o of (BOOK.calls||[])){ const e=(o.history||[]).find(x=>x.id===hid); if(!e) continue; if(!canEdit(o.analyst)) return; e.executed=!e.executed; save(); render(); return; } });
   attachTickerSearch();
   v.querySelectorAll("[data-chart]").forEach(s=>s.onclick=()=>openChart(s.dataset.chart,s.dataset.nm));
   const pdfBtn=v.querySelector("#btnPdf"), pdfIn=v.querySelector("#pdfInput");
