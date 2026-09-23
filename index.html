@@ -103,6 +103,11 @@ select.cell{cursor:pointer; -webkit-appearance:none; appearance:none}
 .exec:hover{border-color:var(--accent)}
 .exec.on{background:var(--up-bg);border-color:var(--up);color:var(--up)}
 .viewonly .exec{cursor:default;pointer-events:none}
+.pxedit{cursor:pointer;user-select:none;margin-left:5px;color:var(--muted);font-size:11px}
+.pxedit:hover{color:var(--accent)}
+.manualpx{color:var(--accent)}
+.manualpx sup{font-size:9px;top:-.5em}
+.viewonly .pxedit{display:none}
 .chartbox{position:relative; height:260px}
 .modal{position:fixed; inset:0; background:rgba(4,6,10,.7); display:flex; align-items:center; justify-content:center; z-index:60; padding:20px}
 .modal .box{background:var(--surface); border:1px solid var(--border-2); border-radius:14px; padding:18px; width:min(720px,95vw); max-height:90vh; overflow:auto}
@@ -565,7 +570,7 @@ function fmtDate(iso){ const p=(iso||"").split("-"); if(p.length<3) return iso||
 function entryHint(o){   // shown in the Entry cost cell when there's no entry price
   const ks=SORTED[o.ticker];
   if(ks&&ks.length)  // ticker is valid & priced, but the entry date is before its first trading day (e.g. a recent IPO)
-    return `<span style="font-size:11px;color:var(--accent)" title="No price on ${esc(o.entryDate||"that date")} — ${esc(o.name||o.ticker)} started trading ${ks[0]}. Set the entry date on/after that.">⚠ from ${fmtDate(ks[0])}</span>`;
+    return `<span style="font-size:11px;color:var(--accent)" title="No price on ${esc(o.entryDate||"that date")} — ${esc(o.name||o.ticker)} started trading ${ks[0]}. Either move the call date on/after that, or click the ✎ and key in your IPO subscription price.">⚠ from ${fmtDate(ks[0])}</span>`;
   return `<span style="font-size:11px;color:var(--accent)" title="Type in the Ticker box and pick the exact listing (with its exchange) from the dropdown">⚠ pick</span>`;
 }
 function aggr(rows){
@@ -591,10 +596,23 @@ function retTip(p){ return (p&&callSign(p.call)===-1)?' title="Sell call \u2014 
 function alphaPeriods(o){   // one graded call per dated stance — the return ON THE CALL during each, absolute + vs index
   const h=activeSorted(o), tk=o.ticker, bench=benchFromTicker(tk);
   return h.map((e,i)=>{ const end=i<h.length-1?h[i+1].date:(o.closeDate||null);
-    const px=periodRet(tk,e.date,end), b=periodRet(bench,e.date,end);
+    const man=(e.entryPx!=null&&isFinite(+e.entryPx)&&+e.entryPx>0);   // an IPO/subscription price you keyed in beats the market close
+    const sP=man?+e.entryPx:oob(tk,e.date), eP=end?oob(tk,end):livePrice(tk);
+    const px=(sP&&eP)?eP/sP-1:null, b=periodRet(bench,e.date,end);
     const abs=px==null?null:callSign(e.call)*px;     // Buy/Hold: the share-price move · Sell: its opposite (price down ⇒ the call made money)
     const rel=(abs!=null&&b!=null)?abs-b:null;       // the call's own return minus the index's return over the same dates
-    return {id:e.id, date:e.date, call:e.call, end, priceRet:px, abs, benchRet:b, rel, result:gradeCall(rel)}; });
+    return {id:e.id, date:e.date, call:e.call, end, entryPx:sP, manualEntry:man, priceRet:px, abs, benchRet:b, rel, result:gradeCall(rel)}; });
+}
+function entryPxHtml(o,p,ccy){   // Entry price = the market close on the call date, unless an IPO/subscription price was keyed in
+  const priced=!!(o.ticker&&SORTED[o.ticker]&&SORTED[o.ticker].length);
+  if(!p) return (o.ticker&&!priced)?entryHint({ticker:o.ticker,name:o.name}):"–";
+  const edit=`<span class="pxedit" data-pxedit="${o.id}" data-pxhist="${p.id}" title="Set this entry price by hand — for an IPO you subscribed to, key in the subscription price instead of the first day's close">✎</span>`;
+  const val=p.entryPx==null
+    ? entryHint({ticker:o.ticker,entryDate:p.date,name:o.name})
+    : (p.manualEntry
+        ? `<span class="manualpx" title="IPO / subscription price you keyed in — not the market close on ${esc(fmtDate(p.date))}">${money(p.entryPx,ccy)}<sup>*</sup></span>`
+        : money(p.entryPx,ccy));
+  return val+edit;
 }
 function alphaCurrent(o){ const p=alphaPeriods(o); return p.length?p[p.length-1]:null; }  // the current (latest) call; end=closeDate when closed
 function alphaTotal(o){   // lifetime return on the CALLS — each stance's directional return compounded — vs the index over the same span
@@ -608,13 +626,11 @@ function alphaLogRow(o){   // ACTIVE / no-call rows (closed rows render via alph
   const ccy=ccyFromTicker(o.ticker), px=livePrice(o.ticker), bench=benchFromTicker(o.ticker), benchNm=BENCH_NAME[bench]||"";
   const state=covState(o), open=openCov.has(o.id), nActive=activeSorted(o).length, nAll=(o.history||[]).length;
   const priced=!!(o.ticker&&SORTED[o.ticker]&&SORTED[o.ticker].length);
-  const now=alphaCurrent(o), entryPx=now?oob(o.ticker,now.date):null;
+  const now=alphaCurrent(o);
   const entryCell=now
     ? `<span style="font-family:var(--mono);font-size:12px" title="Locked — the date of your current call">${fmtDate(now.date)}</span>`
     : `<span class="flat">–</span>`;
-  const entryPxCell=now
-    ? (entryPx!=null?money(entryPx,ccy):entryHint({ticker:o.ticker,entryDate:now.date,name:o.name}))
-    : (o.ticker&&!priced?entryHint({ticker:o.ticker,name:o.name}):"–");
+  const entryPxCell=entryPxHtml(o,now,ccy);
   const callCell = state==="active" ? callPill(currentCall(o)) : `<span class="flat">–</span>`;
   const changeCell = state==="active"
     ? `<button class="btn sm" data-callchange="${o.id}" style="padding:2px 9px" title="Log a new dated call (the current one ends then)">Change</button>`
@@ -645,7 +661,7 @@ function alphaLogRow(o){   // ACTIVE / no-call rows (closed rows render via alph
 function alphaLogClosedRow(o){   // a closed name — frozen returns + call-log dropdown + Reopen
   const ccy=ccyFromTicker(o.ticker), bench=benchFromTicker(o.ticker), benchNm=BENCH_NAME[bench]||"";
   const open=openCov.has(o.id), nAll=(o.history||[]).length;
-  const now=alphaCurrent(o), entryPx=now?oob(o.ticker,now.date):null, closePx=o.closeDate?oob(o.ticker,o.closeDate):null;
+  const now=alphaCurrent(o), closePx=o.closeDate?oob(o.ticker,o.closeDate):null;
   const histCell=nAll
     ? `<span data-covtoggle style="cursor:pointer;user-select:none;color:var(--text-2)" title="Call log">${open?"▾":"▸"} ${nAll}</span>`
     : `<span class="flat">–</span>`;
@@ -656,7 +672,7 @@ function alphaLogClosedRow(o){   // a closed name — frozen returns + call-log 
     <td style="font-family:'Manrope'">${starEl(o)} ${esc(o.name||"")}</td>
     <td>${now?callPill(now.call):`<span class="flat">–</span>`}</td>
     <td style="text-align:center">${execBox(curEntry(o))}</td>
-    <td class="num">${entryPx!=null?money(entryPx,ccy):"–"}</td>
+    <td class="num">${entryPxHtml(o,now,ccy)}</td>
     <td><span style="font-family:var(--mono);font-size:12px">${o.closeDate?fmtDate(o.closeDate):"–"}</span></td>
     <td class="num">${closePx!=null?money(closePx,ccy):"–"}</td>
     <td class="num"${retTip(now)}>${pctSpan(now?now.abs:null)}</td>
@@ -703,8 +719,9 @@ function alphaLogTable(){
   const howto=editing?`<div class="desc" style="margin-bottom:6px"><b>Add a call:</b> type a ticker and pick the exact listing from the dropdown, click <b>Set call</b>, then choose <b>Buy / Sell / Hold</b> and the date you made the call. The stock name, entry price and live return fill in automatically.</div>
     <div class="desc" style="margin-bottom:6px"><b>Calls are locked once saved</b> — you can't edit a past call. Click <b>Change</b> to log a new dated call, or <b>Close call</b> to freeze the return and move it to <b>Closed calls</b> below.</div>
     <div class="desc" style="margin-bottom:6px"><b>Sell calls are scored on the call, not the share price</b> — sell a stock and it falls 10%, the call returns <b>+10%</b>. <b>vs Index</b> takes that return and subtracts the index over the same dates, so any call beating its index is a <b>HIT</b>.</div>
+    <div class="desc" style="margin-bottom:6px"><b>Subscribed to an IPO?</b> The entry defaults to the market close on the call date, which for an IPO is the <b>first day's close</b>, not what you paid. Click the <b>✎</b> beside the entry price and key in your <b>subscription price</b> — the return then runs from your real cost. You can also fill it in when you log the call.</div>
     <div class="desc" style="margin-bottom:6px"><b>Executed:</b> tick the box once the call has actually been acted on in the book (bought / sold). The tick belongs to that dated call — a <b>Change</b> starts a new call, unticked — and you can tick or untick calls logged earlier, including closed ones.</div>`:"";
-  const legend=`<div class="desc">Open the <b>▸ History</b> in the first column for a stock's full call log and lifetime return · ${editing?"click the <b>☆ star</b> beside a name to mark it a <b>high-conviction</b> call":"a <b>★</b> marks a <b>high-conviction</b> call"} · <b>Return</b> is the return on the call, so a <b>Sell</b> shows positive when the share price falls · <b>vs Index</b> is that return minus the index over the same dates, and a call scores <b>HIT</b> whenever it is positive (<b>*</b> = still open, updating live) · a <b>✓ Executed</b> tick means the call was actually acted on (bought / sold).</div>`;
+  const legend=`<div class="desc">Open the <b>▸ History</b> in the first column for a stock's full call log and lifetime return · ${editing?"click the <b>☆ star</b> beside a name to mark it a <b>high-conviction</b> call":"a <b>★</b> marks a <b>high-conviction</b> call"} · <b>Return</b> is the return on the call, so a <b>Sell</b> shows positive when the share price falls · <b>vs Index</b> is that return minus the index over the same dates, and a call scores <b>HIT</b> whenever it is positive (<b>*</b> = still open, updating live) · a <b>✓ Executed</b> tick means the call was actually acted on (bought / sold) · an entry price in <b>amber with a *</b> is one keyed in by hand, such as an IPO subscription price, rather than the market close.</div>`;
   return `${howto}${legend}
     <div class="tw"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
     <div class="addbar"><button class="btn sm" data-addcall>+ Log call</button></div>
@@ -915,6 +932,8 @@ function wire(){
   v.querySelectorAll("[data-callreopen]").forEach(b=>b.onclick=()=>{const o=(BOOK.calls||[]).find(x=>x.id===b.dataset.callreopen); if(o){delete o.closeDate; save(); render();}});
   // high-conviction star — editors toggle; readers see only the gold ★ (CSS .viewonly gating)
   v.querySelectorAll("[data-star]").forEach(s=>s.onclick=()=>{ const o=[...(BOOK.calls||[]),...(BOOK.coverage||[])].find(x=>x.id===s.dataset.star); if(!o||!canEdit(o.analyst))return; o.highConviction=!o.highConviction; save(); render(); });
+  // Entry price — key in an IPO/subscription price in place of the market close
+  v.querySelectorAll("[data-pxedit]").forEach(b=>b.onclick=()=>entryPxModal(b.dataset.pxedit,b.dataset.pxhist));
   // Executed tick — per dated call; editors (own analyst) + admin toggle, readers just see it (CSS .viewonly gating)
   v.querySelectorAll("[data-exec]").forEach(b=>b.onclick=()=>{ const hid=b.dataset.exec;
     for(const o of (BOOK.calls||[])){ const e=(o.history||[]).find(x=>x.id===hid); if(!e) continue; if(!canEdit(o.analyst)) return; e.executed=!e.executed; save(); render(); return; } });
@@ -938,6 +957,7 @@ function logCallModal(callId){   // explicit, dated Buy/Sell/Hold call → recor
     <div class="small">${o.ticker?esc(o.ticker)+" · ":""}${hasCall?`Current: ${callPill(cur)}${lastDate?" since "+fmtDate(lastDate):""}. Pick the new call and the date it takes effect.`:`No call recorded yet. Pick your call and the <b>date you made it</b> — that date becomes the entry, so returns run from then. (Back-date it if you've held the view a while.)`} It's logged in the call log.</div>
     <div class="field"><label>${hasCall?"New call":"Call"}</label><div id="ncPick" style="display:flex;gap:8px">${CALL_OPTS.map(r=>`<button type="button" class="btn ${r===preselect?"gold":"ghost"}" data-pick="${r}" title="${CALL_FULL[r]}" style="min-width:64px;font-weight:700">${r}</button>`).join("")}</div><input type="hidden" id="ncCall" value="${preselect}"></div>
     <div class="field"><label>${hasCall?"Effective date":"Date of this call"}</label><input id="ncDate" type="date" value="${today}" max="${today}"></div>
+    <div class="field"><label>Entry price <span style="color:var(--muted);font-weight:400">— optional, for an IPO you subscribed to</span></label><input id="ncPx" type="number" step="any" min="0" placeholder="leave blank to use the market close on that date"></div>
     <div class="addbar"><button class="btn gold" id="ncSave">${hasCall?"Save change":"Save call"}</button><button class="btn ghost" id="ncCancel">Cancel</button></div>
   </div></div>`;
   root.querySelector("#mx").onclick=root.querySelector("#ncCancel").onclick=()=>root.innerHTML="";
@@ -947,13 +967,17 @@ function logCallModal(callId){   // explicit, dated Buy/Sell/Hold call → recor
   root.querySelector("#ncSave").onclick=()=>{
     const date=root.querySelector("#ncDate").value||today, call=root.querySelector("#ncCall").value;
     if(!date){alert("Pick a date.");return;}
+    const pxRaw=((root.querySelector("#ncPx")||{}).value||"").trim();   // optional IPO / subscription price
+    const epx=pxRaw===""?null:parseFloat(pxRaw);
+    if(pxRaw!==""&&(!isFinite(epx)||epx<=0)){alert("The entry price must be a positive number, or leave it blank to use the market close.");return;}
     // capture a ticker typed on the row but not yet committed (user typed, no dropdown pick / no blur)
     const rowInp=document.querySelector(`#views tr[data-id="${callId}"] input[data-f="ticker"]`);
     if(rowInp){ const tv=rowInp.value.trim(); if(tv&&tv!==o.ticker){ o.ticker=tv; o.country=countryFromTicker(tv); o.currency=ccyFromTicker(tv); } }
     if(!Array.isArray(o.history)) o.history=[];
     delete o.closeDate;   // logging a new call reopens the name
     const existing=o.history.find(x=>x.date===date&&!x.deleted);   // one active call per date (upsert)
-    if(existing) existing.call=call; else o.history.push({id:"hx-"+Date.now().toString(36),date,call});
+    if(existing){ existing.call=call; if(epx!=null) existing.entryPx=epx; }
+    else { const ent={id:"hx-"+Date.now().toString(36),date,call}; if(epx!=null) ent.entryPx=epx; o.history.push(ent); }
     openCov.add(callId); save(); root.innerHTML=""; render();
     if(o.ticker) ensurePriced(o.ticker);   // resolve + price + re-render so Entry price / returns auto-populate
   };
@@ -1011,6 +1035,28 @@ function findHist(histId){ for(const o of [...(BOOK.coverage||[]),...(BOOK.calls
 function covDel(histId){ const h=findHist(histId); if(!h) return; h.e.deleted=true; save(); render(); }        // soft-delete (kept for the record)
 function covRestore(histId){ const h=findHist(histId); if(!h) return; delete h.e.deleted; save(); render(); }
 function addHolding(){const id="h-"+Date.now().toString(36); BOOK.holdings.push({id,name:"",ticker:"",country:"IN",currency:"INR",entry:null,entryDate:"",source:"",notes:""}); save(); render();}
+function entryPxModal(callId,histId){   // key in an IPO/subscription price instead of the market close on the call date
+  const o=(BOOK.calls||[]).find(x=>x.id===callId); if(!o||!canEdit(o.analyst)) return;
+  const e=(o.history||[]).find(x=>x.id===histId); if(!e) return;
+  const ccy=ccyFromTicker(o.ticker), mkt=oob(o.ticker,e.date), ks=SORTED[o.ticker];
+  const root=document.getElementById("modalRoot");
+  root.innerHTML=`<div class="modal"><div class="box"><span class="x" id="mx">×</span>
+    <h3>Entry price — ${esc(o.name||o.ticker||"this name")}</h3>
+    <div class="small">${o.ticker?esc(o.ticker)+" · ":""}${callPill(e.call)} on ${fmtDate(e.date)}. The entry defaults to the <b>market close on that date</b>${mkt!=null?` (${money(mkt,ccy)})`:(ks&&ks.length?` — but this name only started trading ${fmtDate(ks[0])}, so there is no close on that date`:" — no price for this ticker yet")}. Subscribed to an <b>IPO</b>? Key in the <b>price you paid</b> and the return runs from that instead of the first day's close.</div>
+    <div class="field"><label>Entry price${ccy?" ("+esc(ccy)+")":""}</label><input id="epVal" type="number" step="any" min="0" value="${e.entryPx!=null?esc(String(e.entryPx)):""}" placeholder="${mkt!=null?esc(String(mkt)):"what you paid per share"}"></div>
+    <div class="addbar"><button class="btn gold" id="epSave">Save</button>${e.entryPx!=null?'<button class="btn ghost" id="epClear">Use market close</button>':""}<button class="btn ghost" id="epCancel">Cancel</button></div>
+  </div></div>`;
+  root.querySelector("#mx").onclick=root.querySelector("#epCancel").onclick=()=>root.innerHTML="";
+  root.querySelector(".modal").onclick=ev=>{if(ev.target.classList.contains("modal"))root.innerHTML="";};
+  const clr=root.querySelector("#epClear"); if(clr) clr.onclick=()=>{ delete e.entryPx; save(); root.innerHTML=""; render(); };
+  root.querySelector("#epSave").onclick=()=>{
+    const raw=(root.querySelector("#epVal").value||"").trim();
+    if(raw===""){ alert("Type the price you paid, or use Cancel."); return; }
+    const v=parseFloat(raw);
+    if(!isFinite(v)||v<=0){ alert("The entry price must be a positive number."); return; }
+    e.entryPx=v; save(); root.innerHTML=""; render();
+  };
+}
 function closeAlphaModal(callId){   // freeze the current call's return on a date; mark the name Closed
   const o=(BOOK.calls||[]).find(x=>x.id===callId); if(!o) return;
   const h=activeSorted(o); if(!h.length) return;

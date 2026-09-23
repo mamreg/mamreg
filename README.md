@@ -57,6 +57,12 @@ one-time deploy.
   Ticker (dropdown) and set the **Rating** (OW / N / UW). Open **History** (▸) → **＋ Add rating
   change** to log a dated stance (back-date it to backtest); the return during each stance and the
   total since first covered compute automatically. Independent of your timed Alpha calls.
+- **An IPO you subscribed to:** the entry defaults to the market close on the call date, which for a
+  new listing is the **first day's close** rather than what you paid. Click the **✎** beside the
+  entry price and key in your **subscription price**; the return then runs from your real cost. You
+  can also fill it in when you log the call, and you can date the call **before** the listing day.
+  A hand-set entry shows in **amber with a `*`**; reopen the ✎ and choose **Use market close** to
+  undo it. The benchmark comparison still runs from the call date.
 - **Executed:** tick the **Executed** box on a call once it has actually been acted on in the book
   (bought / sold), so readers can tell ideas from trades. One tick per dated call — a **Change** starts
   the new call unticked — and you can tick/untick calls logged earlier, including closed ones.

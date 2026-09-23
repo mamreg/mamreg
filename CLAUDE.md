@@ -27,6 +27,11 @@ Yahoo (live search + prices) and stores the book in KV.
 ## Invariants (don't quietly change)
 
 - Benchmark/currency/country resolve from the **Yahoo ticker suffix** (`SUFFIX_*` maps).
+- Entry price: the adjusted close on the call date, **unless** that dated call carries `entryPx` — an
+  IPO/subscription price keyed in by hand (`entryPxModal`, the ✎ beside the cell, or the optional
+  field in the log-call modal). A valid `entryPx` (> 0) always wins; anything else falls back to the
+  close. The **benchmark leg still runs from the call date**, so the index return is unaffected.
+  `alphaPeriods` returns `entryPx` + `manualEntry` so the cell can flag a hand-set price.
 - Call scoring (`alphaPeriods` → `gradeCall`): adjusted closes, date-driven. `abs` is the return **on
   the call**, not the share price — the price move for Buy/Hold, its **opposite for Sell**
   (`callSign`), so shorting a stock that falls 10% scores +10%. `rel = abs − benchRet` (the index's
