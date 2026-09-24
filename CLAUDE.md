@@ -26,7 +26,15 @@ Yahoo (live search + prices) and stores the book in KV.
 
 ## Invariants (don't quietly change)
 
-- Benchmark/currency/country resolve from the **Yahoo ticker suffix** (`SUFFIX_*` maps).
+- Benchmark/currency/country resolve from the **Yahoo ticker suffix** (`SUFFIX_*` maps). Before adding
+  or changing a benchmark, CHECK IT HAS HISTORY: Yahoo answers `/chart?range=2y` for some index
+  symbols with a **single** point (today's level), which silently kills every index return. Known
+  today-only symbols: `000300.SS`, `399300.SZ`, `000016.SS`, `399006.SZ`, `^SET.BK`, `PSEI.PS`,
+  `^PHDOW`. A-shares therefore use `510300.SS` (Huatai-PB CSI 300 ETF) and Thailand `TDEX.BK`
+  (ThaiDEX SET50) — same currency, real history, and total-return like the stock's adjusted closes.
+  **Philippines (.PS) has no working local-currency index** — it still maps to `PSEI.PS` and shows
+  the "⚠ no index" marker; the only live alternative is `EPHE`, which is USD and would mix FX into
+  alpha. `vsIndexCell` renders that marker whenever a call is priced but its benchmark is not.
 - Entry price: the adjusted close on the call date, **unless** that dated call carries `entryPx` — an
   IPO/subscription price keyed in by hand (`entryPxModal`, the ✎ beside the cell, or the optional
   field in the log-call modal). A valid `entryPx` (> 0) always wins; anything else falls back to the

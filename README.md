@@ -113,6 +113,14 @@ Buy, Sell and Hold alike. The lifetime row inside **History** compounds each sta
 Returns use *adjusted* closes (splits/dividends clean) and are date-driven (the market close on the
 call date). Holdings, by contrast, use your cost basis.
 
+**No index shown?** A call needs two price series: the stock and its benchmark. If the **vs Index**
+cell reads **⚠ no index**, the stock is priced but the market's index has no usable history from the
+data source. If the **entry price** reads ⚠ instead, the ticker itself did not resolve — type it again
+and pick the exact listing from the dropdown, e.g. `002371` → **002371.SZ**, so the suffix sets the
+benchmark and currency. China A-shares are benchmarked to the **CSI 300** via `510300.SS` and Thailand
+to **SET50** via `TDEX.BK`, because the raw index symbols return only today's level. The **Philippines**
+has no working local index, so `.PS` names show ⚠ no index.
+
 > **`scripts/verify_calls.py` is legacy.** It audits the old flat-call seed in `data/book.json`
 > against a frozen `data/prices.json`, not the live book in KV, and it still scores Sell the old way
 > (`alpha < 0`). It is not wired into CI. Treat the app as the source of truth until it is rewritten
