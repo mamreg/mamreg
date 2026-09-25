@@ -138,6 +138,7 @@ select.cell{cursor:pointer; -webkit-appearance:none; appearance:none}
         <span id="sync" class="small"></span>
       </div>
     </div>
+    <div id="updBanner" class="small" style="display:none;margin:0 0 12px;padding:8px 12px;border:1px solid var(--accent);border-radius:9px;background:var(--accent-dim);color:var(--text)">↻ <b>A newer version of this page is available.</b> Your edits are saved — <a href="#" id="updReload" style="color:var(--accent);font-weight:700">reload now</a> to pick it up.</div>
     <div id="roleBanner" class="small" style="display:none;margin:0 0 12px;padding:8px 12px;border:1px solid var(--border-2);border-radius:9px;background:var(--surface-2);color:var(--text-2)"></div>
     <div id="views"></div>
   </main>
@@ -323,6 +324,9 @@ async function load(){
   buildNav(); render();
   document.getElementById("foot").innerHTML=`<a href="#" id="lockBtn" style="color:var(--muted)">Log Out</a>`;
   const lb=document.getElementById("lockBtn"); if(lb) lb.onclick=e=>{e.preventDefault(); if(_poll)clearInterval(_poll); localStorage.removeItem(LS_TOKEN); showGate("Locked. Enter the password to continue.");};
+  const ur=document.getElementById("updReload"); if(ur) ur.onclick=e=>{e.preventDefault(); location.reload();};
+  checkVersion();   // record the build we are running
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkVersion(); });
   await priceAll(); render();
   // auto-resolve any already-saved rows whose ticker can't be priced (e.g. bare codes typed earlier)
   for(const t of [...new Set([...BOOK.calls,...BOOK.holdings,...BOOK.coverage,...FUND_HOLDINGS].map(o=>o.ticker).filter(t=>t&&!PRICES.closes[t]))]) await ensurePriced(t);
@@ -366,7 +370,30 @@ async function pushBook(){
     else syncStatus("error");
   }catch(e){ syncStatus("offline"); }
 }
+/* ---------- stay on the current build ----------
+   GitHub Pages serves index.html with max-age=600, so a tab left open keeps running old code
+   (and can show stale numbers — e.g. a benchmark that has since been fixed). Poll the served
+   file's fingerprint; reload when it changes and nothing is half-typed. */
+let _ver=null;
+async function siteVersion(){   // ETag on Pages, Last-Modified on a plain local server
+  try{ const r=await fetch(location.pathname+"?_v="+Date.now(),{method:"HEAD",cache:"no-store"});
+    if(!r.ok) return null;
+    return r.headers.get("etag")||r.headers.get("last-modified")||null;
+  }catch(e){ return null; }
+}
+async function checkVersion(){
+  const v=await siteVersion(); if(!v) return;
+  if(_ver===null){ _ver=v; return; }            // first reading is the baseline
+  if(v===_ver) return;
+  let tried=false; try{ tried=sessionStorage.getItem("grp-build")===v; }catch(e){}
+  const mr=document.getElementById("modalRoot");
+  const busy=_dirty||!!(mr&&mr.innerHTML.trim());   // never yank the page out from under an edit
+  if(!busy&&!tried){ try{ sessionStorage.setItem("grp-build",v); }catch(e){}   // guard against a reload loop
+    location.reload(); return; }
+  const el=document.getElementById("updBanner"); if(el) el.style.display="";
+}
 function startPolling(){ if(_poll)clearInterval(_poll); _poll=setInterval(async()=>{
+  checkVersion();
   if(_dirty) return;
   try{ const r=await getBook();
     if(r.status===401){ clearInterval(_poll); localStorage.removeItem(LS_TOKEN); showGate("Session expired — enter the password again."); return; }

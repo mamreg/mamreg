@@ -47,12 +47,21 @@ Yahoo (live search + prices) and stores the book in KV.
   per-stance `abs` for the lifetime row. Holdings use cost basis. NB `scoreCall`/`aggr`/`idxCell`
   are dead leftovers of the old flat-call model and still encode the old Sell rule — not in the
   render path; don't revive them.
+- **Staying on the current build:** Pages serves `index.html` with `max-age=600`, so an open tab keeps
+  running old code and can show numbers a later fix has already corrected. `checkVersion()` HEADs the
+  page (`cache:"no-store"`) on load, on every 20s poll and on `visibilitychange`, comparing the ETag
+  (Last-Modified on a plain local server). On a change it reloads — but only when `_dirty` is false and
+  no modal is open, with a `sessionStorage` guard against loops; otherwise it shows `#updBanner`.
 - All live data goes through the Worker (Yahoo blocks direct browser calls — CORS). Don't add
   browser→Yahoo fetches.
 
 ## Verify a change
 
 `cd worker && npx wrangler dev --port 8787 --local` + `python3 -m http.server` for the site; open
-`http://localhost:<port>/#analysts/mark/calls`. Headless async (search/save) needs a real-time
+`http://localhost:<port>/#analysts/mark/calls`. To observe anything on a timer (the version check,
+polling), do NOT use `--virtual-time-budget` — it exhausts before real network replies. Launch plain
+`--headless=new` with no capture flag, mutate/kill from a background script, then read the **server
+access log** (`python3 -u -m http.server`): one GET per load, one HEAD per check, so a second GET right
+after a HEAD proves the self-reload. Check the port is free first — a stale server silently keeps 8000. Headless async (search/save) needs a real-time
 capture (CDP), not `--virtual-time-budget`; pass `?token=localdevsecret` so save doesn't block on
 the passphrase `prompt()`. `?ddtest=<q>` opens the ticker dropdown; `?pdftest` opens the PDF review.

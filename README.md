@@ -113,6 +113,12 @@ Buy, Sell and Hold alike. The lifetime row inside **History** compounds each sta
 Returns use *adjusted* closes (splits/dividends clean) and are date-driven (the market close on the
 call date). Holdings, by contrast, use your cost basis.
 
+**The page keeps itself current.** GitHub Pages caches `index.html` for ten minutes, so a tab left open
+used to keep running old code and could show numbers a later fix had already corrected. The page now
+checks for a new build on load, every twenty seconds, and whenever you switch back to the tab, and
+reloads itself when one lands. If you are mid-edit or have a dialog open it waits and shows a
+**reload now** banner instead, so nothing you typed is lost.
+
 **No index shown?** A call needs two price series: the stock and its benchmark. If the **vs Index**
 cell reads **⚠ no index**, the stock is priced but the market's index has no usable history from the
 data source. If the **entry price** reads ⚠ instead, the ticker itself did not resolve — type it again
