@@ -740,9 +740,17 @@ function alphaLogDetail(o){   // the call log — locked record of dated Buy/Sel
     ${delBlock}
   </td></tr>`;
 }
+function ideaOrder(a,b){   // ★ high-conviction first, then by the Entry date shown on the row, earliest first
+  const sa=a.highConviction?0:1, sb=b.highConviction?0:1;
+  if(sa!==sb) return sa-sb;
+  const da=(alphaCurrent(a)||{}).date||"", db=(alphaCurrent(b)||{}).date||"";
+  if(!da!==!db) return da?-1:1;                      // a row with no call yet sinks to the bottom
+  if(da!==db) return da<db?-1:1;                     // ISO dates sort chronologically
+  return (a.name||a.ticker||"").localeCompare(b.name||b.ticker||"");
+}
 function alphaLogTable(){
-  const rows=(BOOK.calls||[]).filter(o=>o.analyst===selAnalyst);
-  const active=rows.filter(o=>covState(o)!=="closed"), closed=rows.filter(o=>covState(o)==="closed");
+  const rows=(BOOK.calls||[]).filter(o=>o.analyst===selAnalyst);   // .filter gives a copy, so sorting never reorders BOOK.calls
+  const active=rows.filter(o=>covState(o)!=="closed").sort(ideaOrder), closed=rows.filter(o=>covState(o)==="closed").sort(ideaOrder);
   const head=`<tr><th style="text-align:left">History</th><th style="text-align:left">Entry date</th><th style="text-align:left">Ticker</th><th style="text-align:left">Stock</th><th style="text-align:left">Call</th><th style="text-align:center" title="Ticked when the call was actually acted on in the book (bought / sold)">Executed</th><th>Change Call</th><th class="num">Entry price</th><th class="num">Last price</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th>Comment</th><th></th></tr>`;
   const body=active.length?active.map(alphaLogRow).join(""):emptyRow(14,"No calls yet — click + Log call.");
   const closedHead=`<tr><th style="text-align:left">History</th><th style="text-align:left">Entry date</th><th style="text-align:left">Ticker</th><th style="text-align:left">Stock</th><th style="text-align:left">Call</th><th style="text-align:center" title="Ticked when the call was actually acted on in the book (bought / sold)">Executed</th><th class="num">Entry price</th><th>Close date</th><th class="num">Close price</th><th class="num">Return</th><th class="num">vs Index</th><th class="num">Result</th><th>Comment</th><th></th></tr>`;
@@ -754,7 +762,7 @@ function alphaLogTable(){
     <div class="desc" style="margin-bottom:6px"><b>Sell calls are scored on the call, not the share price</b> — sell a stock and it falls 10%, the call returns <b>+10%</b>. <b>vs Index</b> takes that return and subtracts the index over the same dates, so any call beating its index is a <b>HIT</b>.</div>
     <div class="desc" style="margin-bottom:6px"><b>Subscribed to an IPO?</b> The entry defaults to the market close on the call date, which for an IPO is the <b>first day's close</b>, not what you paid. Click the <b>✎</b> beside the entry price and key in your <b>subscription price</b> — the return then runs from your real cost. You can also fill it in when you log the call.</div>
     <div class="desc" style="margin-bottom:6px"><b>Executed:</b> tick the box once the call has actually been acted on in the book (bought / sold). The tick belongs to that dated call — a <b>Change</b> starts a new call, unticked — and you can tick or untick calls logged earlier, including closed ones.</div>`:"";
-  const legend=`<div class="desc">Open the <b>▸ History</b> in the first column for a stock's full call log and lifetime return · ${editing?"click the <b>☆ star</b> beside a name to mark it a <b>high-conviction</b> call":"a <b>★</b> marks a <b>high-conviction</b> call"} · <b>Return</b> is the return on the call, so a <b>Sell</b> shows positive when the share price falls · <b>vs Index</b> is that return minus the index over the same dates, and a call scores <b>HIT</b> whenever it is positive (<b>*</b> = still open, updating live) · a <b>✓ Executed</b> tick means the call was actually acted on (bought / sold) · an entry price in <b>amber with a *</b> is one keyed in by hand, such as an IPO subscription price, rather than the market close.</div>`;
+  const legend=`<div class="desc">Open the <b>▸ History</b> in the first column for a stock's full call log and lifetime return · ${editing?"click the <b>☆ star</b> beside a name to mark it a <b>high-conviction</b> call":"a <b>★</b> marks a <b>high-conviction</b> call"} · <b>Return</b> is the return on the call, so a <b>Sell</b> shows positive when the share price falls · <b>vs Index</b> is that return minus the index over the same dates, and a call scores <b>HIT</b> whenever it is positive (<b>*</b> = still open, updating live) · a <b>✓ Executed</b> tick means the call was actually acted on (bought / sold) · an entry price in <b>amber with a *</b> is one keyed in by hand, such as an IPO subscription price, rather than the market close · rows are ordered <b>★ high-conviction first</b>, then by <b>entry date</b>, earliest at the top.</div>`;
   return `${howto}${legend}
     <div class="tw"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>
     <div class="addbar"><button class="btn sm" data-addcall>+ Log call</button></div>

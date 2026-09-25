@@ -35,6 +35,9 @@ Yahoo (live search + prices) and stores the book in KV.
   **Philippines (.PS) has no working local-currency index** — it still maps to `PSEI.PS` and shows
   the "⚠ no index" marker; the only live alternative is `EPHE`, which is USD and would mix FX into
   alpha. `vsIndexCell` renders that marker whenever a call is priced but its benchmark is not.
+- Row order (`ideaOrder`, both the open and Closed tables): **★ high-conviction first**, then the
+  row's displayed **Entry date** (`alphaCurrent().date`) ascending, rows with no call yet last, ties
+  broken by name. Sort the `.filter()` copies only — never reorder `BOOK.calls` itself.
 - Entry price: the adjusted close on the call date, **unless** that dated call carries `entryPx` — an
   IPO/subscription price keyed in by hand (`entryPxModal`, the ✎ beside the cell, or the optional
   field in the log-call modal). A valid `entryPx` (> 0) always wins; anything else falls back to the

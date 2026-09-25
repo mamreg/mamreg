@@ -20,6 +20,8 @@ auto-save to the cloud. Prices are indicative (delayed ~15 min via the Worker's 
     Buy: sell a stock and it drops 10%, the call returns **+10%**. **vs Index** is that return minus
     the index's own return over the same dates, and any call with a positive **vs Index** is a **HIT**
     (Buy, Sell and Hold alike). The lifetime row in **History** compounds each stance the same way.
+    Rows are ordered **★ high-conviction first**, then by **entry date** with the earliest at the top;
+    a row you have not set a call on yet sits at the bottom. The Closed calls table uses the same order.
   - **Coverage List** — an editable list you key in yourself (independent of Alpha): **Entry date** ·
     Ticker · Stock · **Rating** (OW / N / UW) · **Entry price** · Last price · **Total return** · vs
     Index · **History** · **Comment**. The **Rating** is a coloured pill (OW / N / UW); click
